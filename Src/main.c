@@ -15,15 +15,46 @@
  *
  ******************************************************************************
  */
+#include "stm32f407xx.h"
 
-#include <stdint.h>
+int main(void){
 
-#if !defined(__SOFT_FP__) && defined(__ARM_FP)
-  #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
-#endif
+	uint8_t last_sec = 0xFF;
 
-int main(void)
-{
-    /* Loop forever */
-	for(;;);
-}
+    RTC_TIME_t time;
+    RTC_DATE_t date;
+
+    /* Set initial time and date */
+    time.hrs         = 10;
+    time.min         = 30;
+    time.sec         = 0;
+    time.time_format = TIME_FORMAT_24HRS;
+
+    date.date  = 18;
+    date.month = 4;
+    date.year  = 26;
+    date.day   = SATURDAY;
+
+    if(RTC_Init() != RTC_INIT_OK){
+        while(1);  /*LSE failed to start — halt*/
+    }
+
+    RTC_SetCurrentTime(&time);
+    RTC_SetCurrentDate(&date);
+
+    while(1){
+
+        RTC_GetCurrentTime(&time);
+        RTC_GetCurrentDate(&date);
+
+        if(time.sec != last_sec){
+        	last_sec = time.sec;
+        	printf("%02d:%02d:%02d   %02d.%02d.20%02d\r\n",
+        			time.hrs, time.min, time.sec,
+					date.date, date.month, date.year);
+
+        	for (uint32_t i = 0; i < 400000; i++);
+        	}
+        }
+    }
+

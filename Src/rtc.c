@@ -4,199 +4,203 @@
  *  Created on: Apr 11, 2026
  *      Author: maksym-petliukh
  */
-
 #include "stm32f407xx.h"
 #include "rtc.h"
 
-/*Some helper functions*/
-void RTC_DS1307_I2C_PinConfig(void){
-	GPIO_Handle_t i2c_sda, i2c_scl;
-
-	memset(&i2c_sda, 0,sizeof(i2c_sda));
-	memset(&i2c_scl, 0,sizeof(i2c_scl));
-
-	i2c_sda.pGPIOx = DS1307_I2C_GPIO_PORT;
-	i2c_sda.GPIOx_CFG.pin_mode = GPIO_MODE_ALT_FN;
-	i2c_sda.GPIOx_CFG.pin_alt_func_mode = 4;
-	i2c_sda.GPIOx_CFG.pin_number = DS1307_I2C_SDA_PIN;
-	i2c_sda.GPIOx_CFG.pin_op_type = GPIO_OUT_OPDRN;
-	i2c_sda.GPIOx_CFG.pin_pu_pd_ctrl = DS1307_I2C_PUPD;
-	i2c_sda.GPIOx_CFG.pin_speed = GPIO_OSPEED_HIGH;
-
-	GPIO_Init(&i2c_sda);
-
-	i2c_scl.pGPIOx = DS1307_I2C_GPIO_PORT;
-	i2c_scl.GPIOx_CFG.pin_mode = GPIO_MODE_ALT_FN;
-	i2c_scl.GPIOx_CFG.pin_alt_func_mode = 4;
-	i2c_scl.GPIOx_CFG.pin_number = DS1307_I2C_SCL_PIN;
-	i2c_scl.GPIOx_CFG.pin_op_type = GPIO_OUT_OPDRN;
-	i2c_scl.GPIOx_CFG.pin_pu_pd_ctrl = DS1307_I2C_PUPD;
-	i2c_scl.GPIOx_CFG.pin_speed = GPIO_OSPEED_HIGH;
-
-	GPIO_Init(&i2c_scl);
-}
-
-I2C_Handle_t gRTC_DS1307_I2C_Handle;
-
-void RTC_DS1307_I2C_Config(void){
-	gRTC_DS1307_I2C_Handle.pI2Cx = DS1307_I2C;
-	gRTC_DS1307_I2C_Handle.I2C_Config.I2C_AckControl = I2C_ACK_ENABLE;
-	gRTC_DS1307_I2C_Handle.I2C_Config.I2C_SCLSpeed = DS1307_I2C_SPEED;
-
-	I2C_Init(&gRTC_DS1307_I2C_Handle);
-}
-
-void RTC_DS1307_Write(uint8_t value, uint8_t address){
-	uint8_t tx[2];
-	tx[0] = address;
-	tx[1] = value;
-	I2C_Master_Transmit(&gRTC_DS1307_I2C_Handle, tx, 2, DS1307_I2C_SLAVE_ADDR, 0);
-}
-uint8_t RTC_DS1307_Read(uint8_t address){
-	uint8_t rx;
-	I2C_Master_Transmit(&gRTC_DS1307_I2C_Handle, &address, 1, DS1307_I2C_SLAVE_ADDR, 0);
-	I2C_Master_Receive(&gRTC_DS1307_I2C_Handle, &rx, 1, DS1307_I2C_SLAVE_ADDR, 0);
-
-	return rx;
-}
-
-uint8_t  bin_to_bcd(uint8_t value){
-	uint8_t m, n, bcd;
-
-	bcd = value;
-	if(value >= 10){
-		m = value / 10;
-		n = value % 10;
-		bcd = (uint8_t)((m << 4) | n);
-	}
-	return bcd;
+/*
+ * Helper functions
+ */
+uint8_t bin_to_bcd(uint8_t value){
+    if(value >= 10)
+        return (uint8_t)(((value / 10) << 4) | (value % 10));
+    return value;
 }
 
 uint8_t bcd_to_bin(uint8_t value){
-	uint8_t m, n, bin;
+    return (uint8_t)(((value >> 4) * 10) + (value & 0x0F));
+}
 
-	m = (uint8_t)((value >> 4) * 10);
-	n = value & (uint8_t)0x0F;
-	bin = m + n;
+/*
+ * Static helper: disable RTC write protection
+ */
+static void RTC_DisableWriteProtection(void){
+    RTC->WPR = 0xCA;
+    RTC->WPR = 0x53;
+}
 
-	return bin;
+/*
+ * Static helper: enable RTC write protection
+ */
+static void RTC_EnableWriteProtection(void){
+    RTC->WPR = 0xFF;
+}
+
+/*
+ * Static helper: enter RTC initialization mode
+ */
+static void RTC_EnterInitMode(void){
+    RTC->ISR |= (1 << RTC_ISR_INIT);
+    while(!(RTC->ISR & (1 << RTC_ISR_INITF)));
+}
+
+/*
+ * Static helper: exit RTC initialization mode
+ */
+static void RTC_ExitInitMode(void){
+    RTC->ISR &= ~(1 << RTC_ISR_INIT);
 }
 
 /**********************************************************************
- *@fn             RTC_DS1307_Init
+ * @fn          RTC_Init
  *
- * @brief         This function initializes required peripherals
+ * @brief       Initializes the STM32F407 internal RTC using LSE
+ *              (32.768 kHz crystal on PC14/PC15).
+ *              Prescalers: PREDIV_A=127, PREDIV_S=255 → 1 Hz tick.
  *
- * return         Clock State (CH: 0 - initiated, CH: 1 - init failed)
+ * @return      RTC_INIT_OK (0) on success, RTC_INIT_ERR (1) on LSE timeout
  */
-uint8_t RTC_DS1307_Init(void){
-	//initialize I2C pins
-	RTC_DS1307_I2C_PinConfig();
+uint8_t RTC_Init(void){
 
-	//Initialize I2C peripheral
-	RTC_DS1307_I2C_Config();
+    /* 1. Enable PWR clock and unlock backup domain */
+    RCC_PWR_CLK_ENABLE();
+    PWR->CR |= (1 << PWR_CR_DBP);
 
-	//Enable I2C peripheral
-	I2C_PeripheralControl(DS1307_I2C, ENABLE);
+    /* 2. Reset backup domain to clear any stuck state */
+    RCC->BDCR |= (1 << RCC_BDCR_BDRST);
+    RCC->BDCR &= ~(1 << RCC_BDCR_BDRST);
 
-	//Make clock halt as 0
-	RTC_DS1307_Write(0x00, DS1307_ADDR_SEC);
+    /* 3. Enable LSE and wait for it to be ready */
+    RCC->BDCR |= (1 << RCC_BDCR_LSEON);
+    uint32_t timeout = 1000000U;
+    while(!(RCC->BDCR & (1 << RCC_BDCR_LSERDY))){
+        if(--timeout == 0U) return RTC_INIT_ERR;
+    }
 
-	//Read back clock halt bit
-	uint8_t clockState = RTC_DS1307_Read(DS1307_ADDR_SEC);
+    /* 4. Select LSE as RTC clock source (RTCSEL = 01) */
+    RCC->BDCR &= ~(3 << RCC_BDCR_RTCSEL);   /*clear RTCSEL*/
+    RCC->BDCR |=  (1 << RCC_BDCR_RTCSEL);   /*set LSE*/
 
-	return ((clockState >> 7) & 0x1);
+    /* 5. Enable RTC clock */
+    RCC_RTC_CLK_ENABLE();
+
+    /* 6. Unlock RTC write protection */
+    RTC_DisableWriteProtection();
+
+    /* 7. Enter initialization mode */
+    RTC_EnterInitMode();
+
+    /* 8. Configure prescalers: PREDIV_A=127, PREDIV_S=255
+     *    f_ck_spre = 32768 / (127+1) / (255+1) = 1 Hz */
+    RTC->PRER = (127U << 16) | (255U << 0);
+
+    /* 9. Set 24-hour format */
+    RTC->CR &= ~(1 << RTC_CR_FMT);
+
+    /* 10. Exit initialization mode and restore write protection */
+    RTC_ExitInitMode();
+    RTC_EnableWriteProtection();
+
+    return RTC_INIT_OK;
 }
 
 /********************************************************************
- * @fn              RTC_DS1307_SetCurrentTime
+ * @fn          RTC_SetCurrentTime
  *
- * @brief           This function sets sec, min, hrs registers of our RTC module
+ * @brief       Writes hours, minutes and seconds into RTC_TR register.
+ *              Input values are in binary, converted to BCD internally.
  *
- * @param[in]       Pointer to the structure which contains all required time registers of RTC module
+ * @param[in]   rtc_time  Pointer to RTC_TIME_t structure with time to set
  *
- * @return          none
+ * @return      none
  */
-void RTC_DS1307_SetCurrentTime(RTC_TIME_t *rtc_time){
-	uint8_t seconds, hours;
-	seconds = bin_to_bcd(rtc_time->sec);
-	seconds &= ~(1 << 7);
-	RTC_DS1307_Write(seconds, DS1307_ADDR_SEC);
+void RTC_SetCurrentTime(RTC_TIME_t *rtc_time){
+    uint8_t sec = bin_to_bcd(rtc_time->sec);
+    uint8_t min = bin_to_bcd(rtc_time->min);
+    uint8_t hrs = bin_to_bcd(rtc_time->hrs);
 
-	RTC_DS1307_Write(bin_to_bcd(rtc_time->min), DS1307_ADDR_MIN);\
+    uint32_t tr = 0;
+    tr |= ((sec & 0x7FU) << RTC_TR_SU);
+    tr |= ((min & 0x7FU) << RTC_TR_MNU);
+    tr |= ((hrs & 0x3FU) << RTC_TR_HU);
 
-	hours = bin_to_bcd(rtc_time->hrs);
+    if(rtc_time->time_format == TIME_FORMAT_12HRS_PM)
+        tr |= (1U << RTC_TR_PM);
 
-	if(rtc_time->time_format == TIME_FORMAT_24HRS){
-		hours &= ~(1 << 6);
-	}else{
-		hours |= (1 << 6);
-		hours = (rtc_time->time_format == TIME_FORMAT_12HRS_PM) ? (hours | (1 << 5)) : (hours & ~(1 << 5));
-	}
-	RTC_DS1307_Write(hours, DS1307_ADDR_HRS);
+    RTC_DisableWriteProtection();
+    RTC_EnterInitMode();
+    RTC->TR = tr;
+    RTC_ExitInitMode();
+    RTC_EnableWriteProtection();
 }
+
 /*******************************************************************
- * @fn              RTC_DS1307_GetCurrentTime
+ * @fn          RTC_GetCurrentTime
  *
- * @brief           This function gets values from the RTC module registers
+ * @brief       Reads hours, minutes and seconds from RTC_TR register.
+ *              RTC_TR is read once to avoid split-second capture issue.
+ *              Output values are in binary.
  *
- * @param[in]       Pointer to the structure which contains all required time registers of RTC module
+ * @param[in]   rtc_time  Pointer to RTC_TIME_t structure to fill
  *
- * @return          none
+ * @return      none
  */
-void RTC_DS1307_GetCurrentTime(RTC_TIME_t *rtc_time){
-	uint8_t seconds, hours;
-	seconds = RTC_DS1307_Read(DS1307_ADDR_SEC);
+void RTC_GetCurrentTime(RTC_TIME_t *rtc_time){
+    uint32_t tr = RTC->TR;  /*single read: latches DR simultaneously*/
 
-	seconds &= ~(1 << 7);
+    rtc_time->sec = bcd_to_bin((tr >> RTC_TR_SU) & 0x7FU);
+    rtc_time->min = bcd_to_bin((tr >> RTC_TR_MNU) & 0x7FU);
+    rtc_time->hrs = bcd_to_bin((tr >> RTC_TR_HU) & 0x3FU);
 
-	rtc_time->sec = bcd_to_bin(seconds);
-	rtc_time->min = bcd_to_bin(RTC_DS1307_Read(DS1307_ADDR_MIN));
-
-	hours = RTC_DS1307_Read(DS1307_ADDR_HRS);
-	if(hours & (1 << 6)){
-		//12 hrs format
-		rtc_time->time_format = !((hours & (1 << 5)) == 0);
-		hours &= ~(0x3 << 5); // clear 6th and 5th bits
-	}else{
-		//24 hrs format
-		rtc_time->time_format = TIME_FORMAT_24HRS;
-	}
-
-	rtc_time->hrs = bcd_to_bin(hours);
+    if(tr & (1U << RTC_TR_PM))
+        rtc_time->time_format = TIME_FORMAT_12HRS_PM;
+    else if(RTC->CR & (1U << RTC_CR_FMT))
+        rtc_time->time_format = TIME_FORMAT_12HRS_AM;
+    else
+        rtc_time->time_format = TIME_FORMAT_24HRS;
 }
 
 /**********************************************************************
- * @fn              RTC_DS1307_SetCurrentDate
+ * @fn          RTC_SetCurrentDate
  *
- * @brief           This function sets the date and number of a day in RTC module registers
+ * @brief       Writes day, month, year and weekday into RTC_DR register.
+ *              Input values are in binary, converted to BCD internally.
+ *              Year is stored as offset from 2000 (e.g. 2026 → 26).
  *
- * @param           Pointer to the structure which contains all required date registers of RTC module
+ * @param[in]   rtc_date  Pointer to RTC_DATE_t structure with date to set
  *
- * @return          none
+ * @return      none
  */
-void RTC_DS1307_SetCurrentDate(RTC_DATE_t *rtc_date){
-	RTC_DS1307_Write(bin_to_bcd(rtc_date->date), DS1307_ADDR_DATE);
+void RTC_SetCurrentDate(RTC_DATE_t *rtc_date){
+    uint32_t dr = 0;
+    dr |= ((bin_to_bcd(rtc_date->date)  & 0x3FU) << RTC_DR_DU);
+    dr |= ((bin_to_bcd(rtc_date->month) & 0x1FU) << RTC_DR_MU);
+    dr |= ((rtc_date->day               & 0x07U) << RTC_DR_WDU);
+    dr |= ((bin_to_bcd(rtc_date->year)  & 0xFFU) << RTC_DR_YU);
 
-	RTC_DS1307_Write(bin_to_bcd(rtc_date->month), DS1307_ADDR_MONTH);
-
-	RTC_DS1307_Write(bin_to_bcd(rtc_date->year), DS1307_ADDR_YEAR);
-
-	RTC_DS1307_Write(bin_to_bcd(rtc_date->day), DS1307_ADDR_DAY);
+    RTC_DisableWriteProtection();
+    RTC_EnterInitMode();
+    RTC->DR = dr;
+    RTC_ExitInitMode();
+    RTC_EnableWriteProtection();
 }
 
 /*******************************************************************
- * @fn              RTC_DS1307_GetCurrentTime
+ * @fn          RTC_GetCurrentDate
  *
- * @brief           This function gets values of date and number of a day in RTC module registers
+ * @brief       Reads day, month, year and weekday from RTC_DR register.
+ *              Must be called after RTC_GetCurrentTime() because reading
+ *              RTC_TR latches RTC_DR shadow register.
+ *              Output values are in binary.
  *
- * @param[in]       Pointer to the structure which contains all required date registers of RTC module
+ * @param[in]   rtc_date  Pointer to RTC_DATE_t structure to fill
  *
- * @return          none
+ * @return      none
  */
-void RTC_DS1307_GetCurrentDate(RTC_DATE_t *rtc_date){
-	rtc_date->date = bcd_to_bin(RTC_DS1307_Read(DS1307_ADDR_DATE) & 0x3F);
-	rtc_date->month = bcd_to_bin(RTC_DS1307_Read(DS1307_ADDR_MONTH) & 0x1F);
-	rtc_date->year = bcd_to_bin(RTC_DS1307_Read(DS1307_ADDR_YEAR) & 0xFF);
-	rtc_date->day = bcd_to_bin(RTC_DS1307_Read(DS1307_ADDR_DAY) & 0x07);
+void RTC_GetCurrentDate(RTC_DATE_t *rtc_date){
+    uint32_t dr = RTC->DR;
+
+    rtc_date->date  = bcd_to_bin((dr >> RTC_DR_DU)  & 0x3FU);
+    rtc_date->month = bcd_to_bin((dr >> RTC_DR_MU)  & 0x1FU);
+    rtc_date->day   =            (dr >> RTC_DR_WDU) & 0x07U;
+    rtc_date->year  = bcd_to_bin((dr >> RTC_DR_YU)  & 0xFFU);
 }

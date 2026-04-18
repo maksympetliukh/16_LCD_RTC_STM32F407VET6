@@ -784,6 +784,160 @@ typedef struct{
 #define USART_GTPR_PSC    0
 #define USART_GTPR_GT     8
 
+/*
+ * PWR peripheral base address
+ */
+#define PWR_BASE    0x40007000UL /*PWR*/
+
+/*
+ * Clock enable macro for PWR peripheral
+ */
+#define RCC_PWR_CLK_ENABLE()   ((RCC->APB1ENR) |= (1 << 28))
+
+/*
+ * Clock disable macro for PWR peripheral
+ */
+#define RCC_PWR_CLK_DISABLE()  ((RCC->APB1ENR) &= ~(1 << 28))
+
+/*
+ * PWR peripheral register structure
+ */
+typedef struct{
+    uint32_t volatile CR;   /*PWR power control register          offset: 0x00*/
+    uint32_t volatile CSR;  /*PWR power control/status register   offset: 0x04*/
+}PWR_REG_t;
+
+/*
+ * PWR peripheral definition
+ */
+#define PWR ((PWR_REG_t*)PWR_BASE)
+
+/*
+ * PWR CR bit position macros
+ */
+#define PWR_CR_DBP  8  /*Disable backup domain write protection*/
+
+/*
+ * RTC peripheral base address
+ */
+#define RTC_BASE    0x40002800UL /*RTC*/
+
+/*
+ * Clock enable macro for RTC peripheral
+ */
+#define RCC_RTC_CLK_ENABLE()   ((RCC->BDCR) |= (1 << 15))
+
+/*
+ * Clock disable macro for RTC peripheral
+ */
+#define RCC_RTC_CLK_DISABLE()  ((RCC->BDCR) &= ~(1 << 15))
+
+/*
+ * RTC peripheral register structure
+ */
+typedef struct{
+    uint32_t volatile TR;       /*RTC time register                    offset: 0x00*/
+    uint32_t volatile DR;       /*RTC date register                    offset: 0x04*/
+    uint32_t volatile CR;       /*RTC control register                 offset: 0x08*/
+    uint32_t volatile ISR;      /*RTC initialization and status reg    offset: 0x0C*/
+    uint32_t volatile PRER;     /*RTC prescaler register               offset: 0x10*/
+    uint32_t volatile WUTR;     /*RTC wakeup timer register            offset: 0x14*/
+    uint32_t volatile CALIBR;   /*RTC calibration register             offset: 0x18*/
+    uint32_t volatile ALRMAR;   /*RTC alarm A register                 offset: 0x1C*/
+    uint32_t volatile ALRMBR;   /*RTC alarm B register                 offset: 0x20*/
+    uint32_t volatile WPR;      /*RTC write protection register        offset: 0x24*/
+    uint32_t volatile SSR;      /*RTC sub second register              offset: 0x28*/
+    uint32_t volatile SHIFTR;   /*RTC shift control register           offset: 0x2C*/
+    uint32_t volatile TSTR;     /*RTC timestamp time register          offset: 0x30*/
+    uint32_t volatile TSDR;     /*RTC timestamp date register          offset: 0x34*/
+    uint32_t volatile TSSSR;    /*RTC timestamp sub second register    offset: 0x38*/
+    uint32_t volatile CALR;     /*RTC calibration register             offset: 0x3C*/
+    uint32_t volatile TAFCR;    /*RTC tamper/alternate function reg    offset: 0x40*/
+    uint32_t volatile ALRMASSR; /*RTC alarm A sub second register      offset: 0x44*/
+    uint32_t volatile ALRMBSSR; /*RTC alarm B sub second register      offset: 0x48*/
+}RTC_REG_t;
+
+/*
+ * RTC peripheral definition
+ */
+#define RTC ((RTC_REG_t*)RTC_BASE)
+
+/*
+ * RTC TR bit position macros
+ */
+#define RTC_TR_SU       0   /*Second units [3:0]*/
+#define RTC_TR_ST       4   /*Second tens [2:0]*/
+#define RTC_TR_MNU      8   /*Minute units [3:0]*/
+#define RTC_TR_MNT      12  /*Minute tens [2:0]*/
+#define RTC_TR_HU       16  /*Hour units [3:0]*/
+#define RTC_TR_HT       20  /*Hour tens [1:0]*/
+#define RTC_TR_PM       22  /*AM/PM notation*/
+
+/*
+ * RTC DR bit position macros
+ */
+#define RTC_DR_DU       0   /*Date units [3:0]*/
+#define RTC_DR_DT       4   /*Date tens [1:0]*/
+#define RTC_DR_MU       8   /*Month units [3:0]*/
+#define RTC_DR_MT       12  /*Month tens*/
+#define RTC_DR_WDU      13  /*Week day units [2:0]*/
+#define RTC_DR_YU       16  /*Year units [3:0]*/
+#define RTC_DR_YT       20  /*Year tens [3:0]*/
+
+/*
+ * RTC CR bit position macros
+ */
+#define RTC_CR_WUCKSEL  0   /*Wakeup clock selection [2:0]*/
+#define RTC_CR_TSEDGE   3   /*Timestamp event active edge*/
+#define RTC_CR_REFCKON  4   /*Reference clock detection enable*/
+#define RTC_CR_BYPSHAD  5   /*Bypass the shadow registers*/
+#define RTC_CR_FMT      6   /*Hour format: 0=24h, 1=12h*/
+#define RTC_CR_DCE      7   /*Coarse digital calibration enable*/
+#define RTC_CR_ALRAE    8   /*Alarm A enable*/
+#define RTC_CR_ALRBE    9   /*Alarm B enable*/
+#define RTC_CR_WUTE     10  /*Wakeup timer enable*/
+#define RTC_CR_TSE      11  /*Timestamp enable*/
+#define RTC_CR_ALRAIE   12  /*Alarm A interrupt enable*/
+#define RTC_CR_ALRBIE   13  /*Alarm B interrupt enable*/
+#define RTC_CR_WUTIE    14  /*Wakeup timer interrupt enable*/
+#define RTC_CR_TSIE     15  /*Timestamp interrupt enable*/
+#define RTC_CR_ADD1H    16  /*Add 1 hour (summer time change)*/
+#define RTC_CR_SUB1H    17  /*Subtract 1 hour (winter time change)*/
+#define RTC_CR_BKP      18  /*Backup*/
+#define RTC_CR_COSEL    19  /*Calibration output selection*/
+#define RTC_CR_POL      20  /*Output polarity*/
+#define RTC_CR_OSEL     21  /*Output selection [1:0]*/
+#define RTC_CR_COE      23  /*Calibration output enable*/
+
+/*
+ * RTC ISR bit position macros
+ */
+#define RTC_ISR_ALRAWF  0   /*Alarm A write flag*/
+#define RTC_ISR_ALRBWF  1   /*Alarm B write flag*/
+#define RTC_ISR_WUTWF   2   /*Wakeup timer write flag*/
+#define RTC_ISR_SHPF    3   /*Shift operation pending*/
+#define RTC_ISR_INITS   4   /*Initialization status flag*/
+#define RTC_ISR_RSF     5   /*Registers synchronization flag*/
+#define RTC_ISR_INITF   6   /*Initialization flag*/
+#define RTC_ISR_INIT    7   /*Initialization mode*/
+#define RTC_ISR_ALRAF   8   /*Alarm A flag*/
+#define RTC_ISR_ALRBF   9   /*Alarm B flag*/
+#define RTC_ISR_WUTF    10  /*Wakeup timer flag*/
+#define RTC_ISR_TSF     11  /*Timestamp flag*/
+#define RTC_ISR_TSOVF   12  /*Timestamp overflow flag*/
+#define RTC_ISR_TAMP1F  13  /*Tamper 1 detection flag*/
+#define RTC_ISR_TAMP2F  14  /*Tamper 2 detection flag*/
+#define RTC_ISR_RECALPF 16  /*Recalibration pending flag*/
+
+/*
+ * RCC BDCR bit position macros
+ */
+#define RCC_BDCR_LSEON  0   /*External low-speed oscillator enable*/
+#define RCC_BDCR_LSERDY 1   /*External low-speed oscillator ready*/
+#define RCC_BDCR_LSEBYP 2   /*External low-speed oscillator bypass*/
+#define RCC_BDCR_RTCSEL 8   /*RTC clock source selection [1:0]*/
+#define RCC_BDCR_RTCEN  15  /*RTC clock enable*/
+#define RCC_BDCR_BDRST  16  /*Backup domain software reset*/
 
 #include "gpio.h"
 #include "usart.h"

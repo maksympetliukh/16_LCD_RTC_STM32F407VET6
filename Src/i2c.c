@@ -317,7 +317,6 @@ void I2C_Slave_EnableInterrupts(I2C_REG_t *pI2Cx, uint8_t enDi){
  * @return       none
  */
 void I2C_Master_Transmit(I2C_Handle_t *pI2C_Handle, uint8_t *pTxBuffer, uint8_t len, uint8_t SlaveAddr, uint8_t sr){
-
 	//Generate START condition
 	I2C_GenerateStartCondition(pI2C_Handle->pI2Cx);
 
