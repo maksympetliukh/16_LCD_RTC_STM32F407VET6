@@ -29,7 +29,7 @@ void GPIO_Init(GPIO_Handle_t *pGPIO_Handle){
 		//Multiplied by 2 because every pin takes 2 bit fields
 		tmp = (pGPIO_Handle->GPIOx_CFG.pin_mode << (2 * pGPIO_Handle->GPIOx_CFG.pin_number));
 
-		pGPIO_Handle->pGPIOx->MODER &= ~(0x3 << pGPIO_Handle->GPIOx_CFG.pin_number);//clearing
+		pGPIO_Handle->pGPIOx->MODER &= ~(0x3 << (2 * pGPIO_Handle->GPIOx_CFG.pin_number));//clearing
 		pGPIO_Handle->pGPIOx->MODER |= tmp;//setting
 	}else{
 		if(pGPIO_Handle->GPIOx_CFG.pin_mode == GPIO_MODE_IT_FT){
@@ -70,14 +70,14 @@ void GPIO_Init(GPIO_Handle_t *pGPIO_Handle){
 	//GPIO pin output speed configuration
 	tmp = (pGPIO_Handle->GPIOx_CFG.pin_speed << (2 * pGPIO_Handle->GPIOx_CFG.pin_number));
 
-	pGPIO_Handle->pGPIOx->OSPEEDR &= ~(0x3 << pGPIO_Handle->GPIOx_CFG.pin_number);
+	pGPIO_Handle->pGPIOx->OSPEEDR &= ~(0x3 << (2 * pGPIO_Handle->GPIOx_CFG.pin_number));
 	pGPIO_Handle->pGPIOx->OSPEEDR |= tmp;
 
 	tmp = 0;
 	//GPIO pin PUPD configuration
 	tmp = (pGPIO_Handle->GPIOx_CFG.pin_pu_pd_ctrl << (2 * pGPIO_Handle->GPIOx_CFG.pin_number));
 
-	pGPIO_Handle->pGPIOx->PUPDR &= ~(0x3 << pGPIO_Handle->GPIOx_CFG.pin_number);
+	pGPIO_Handle->pGPIOx->PUPDR &= ~(0x3 << (2 * pGPIO_Handle->GPIOx_CFG.pin_number));
 	pGPIO_Handle->pGPIOx->PUPDR |= tmp;
 
 	tmp = 0;

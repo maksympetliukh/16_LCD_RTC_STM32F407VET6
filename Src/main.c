@@ -16,45 +16,56 @@
  ******************************************************************************
  */
 #include "stm32f407xx.h"
+#include "rtc.h"
+#include "lcd.h"
 
 int main(void){
-
 	uint8_t last_sec = 0xFF;
-
     RTC_TIME_t time;
     RTC_DATE_t date;
 
-    /* Set initial time and date */
-    time.hrs         = 10;
-    time.min         = 30;
-    time.sec         = 0;
+    //Set initial time and date
+    time.hrs = 17;
+    time.min = 40;
+    time.sec = 0;
     time.time_format = TIME_FORMAT_24HRS;
 
-    date.date  = 18;
+    date.date  = 19;
     date.month = 4;
     date.year  = 26;
-    date.day   = SATURDAY;
+    date.day   = SUNDAY;
 
     if(RTC_Init() != RTC_INIT_OK){
-        while(1);  /*LSE failed to start — halt*/
+    while(1);  /*LSE failed to start — halt*/
     }
 
     RTC_SetCurrentTime(&time);
     RTC_SetCurrentDate(&date);
+
+    //Initiate LCD
+    LCD_Init();
+    //Clear display before sending data
+    LCD_ClearDisplay();
 
     while(1){
 
         RTC_GetCurrentTime(&time);
         RTC_GetCurrentDate(&date);
 
+        //keep 1 sec refresh
         if(time.sec != last_sec){
         	last_sec = time.sec;
-        	printf("%02d:%02d:%02d   %02d.%02d.20%02d\r\n",
-        			time.hrs, time.min, time.sec,
-					date.date, date.month, date.year);
 
-        	for (uint32_t i = 0; i < 400000; i++);
-        	}
+        	LCD_SetCursor(1, 1);
+        	char time_buf[16];
+        	sprintf(time_buf, "%02d:%02d:%02d", time.hrs, time.min, time.sec);
+        	LCD_SendString(time_buf);//display clock
+
+        	LCD_SetCursor(2, 1);
+        	char date_buf[16];
+        	sprintf(date_buf, "%02d.%02d.%02d", date.date, date.month, date.year);
+        	LCD_SendString(date_buf);//display the date at 2nd row
         }
     }
+}
 
